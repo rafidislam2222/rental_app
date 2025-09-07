@@ -140,7 +140,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'renter') {
                 </span>
                 Browse Properties
             </a>
-            <a class="bookings" href="/rental_system/public/index.php?url=PropertyController/my_bookings">
+            <a class="bookings" href="/rental_system/public/index.php?url=BookingController/myBookings">
                 <span class="icon">
                     <!-- Calendar SVG -->
                     <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
@@ -152,7 +152,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'renter') {
                 </span>
                 My Bookings
             </a>
-            <a class="wishlist" href="/rental_system/public/index.php?url=WishlistController/view">
+            <a class="wishlist" href="/rental_system/public/index.php?url=WishlistController/index">
                 <span class="icon">
                     <!-- Heart SVG -->
                     <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
@@ -170,6 +170,19 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'renter') {
                     </svg>
                 </span>
                 Logout
+            </a>
+            <a class="browse" href="/rental_system/public/index.php?url=ChatController/index">
+                <span class="icon">
+                    <!-- AI Assistant SVG (chat bubble) -->
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                        <path d="M3 16v-2a2 2 0 012-2h10a2 2 0 012 2v2a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#fff" stroke-width="2"/>
+                        <circle cx="7" cy="13" r="1" fill="#fff"/>
+                        <circle cx="10" cy="13" r="1" fill="#fff"/>
+                        <circle cx="13" cy="13" r="1" fill="#fff"/>
+                        <rect x="3" y="4" width="14" height="8" rx="4" stroke="#fff" stroke-width="2"/>
+                    </svg>
+                </span>
+                AI Assistant
             </a>
         </div>
     </div>

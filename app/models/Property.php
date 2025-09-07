@@ -72,8 +72,7 @@ class Property extends Model {
      */
     public function getAvailableProperties($filters = []) {
         $sql = "
-            SELECT p.*, 
-            (SELECT image_path FROM property_images WHERE property_id = p.id LIMIT 1) AS thumbnail
+            SELECT p.*
             FROM properties p
             WHERE TRIM(availability) = 'available'
         ";
@@ -109,13 +108,66 @@ class Property extends Model {
 
         $stmt = $this->conn->prepare($sql);
         $stmt->execute($params);
+        $properties = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($properties as &$property) {
+            $stmtImg = $this->conn->prepare("SELECT image_path FROM property_images WHERE property_id = ?");
+            $stmtImg->execute([$property['id']]);
+            $property['images'] = $stmtImg->fetchAll(PDO::FETCH_ASSOC);
+        }
+        return $properties;
     }
+
+    /**
+     * NEW FUNCTION: Get all properties (available + booked) with booked flag
+     */
+    public function getAllPropertiesWithStatus($filters = []) {
+        $sql = "
+            SELECT p.*, 
+                   (SELECT image_path FROM property_images WHERE property_id = p.id LIMIT 1) AS thumbnail,
+                   CASE WHEN p.availability = 'booked' THEN 1 ELSE 0 END AS is_booked
+            FROM properties p
+            WHERE 1=1
+        ";
+
+        $params = [];
+
+        if (!empty($filters['location'])) {
+            $sql .= " AND p.location LIKE ?";
+            $params[] = "%" . trim($filters['location']) . "%";
+        }
+        if (!empty($filters['min_price'])) {
+            $sql .= " AND p.price >= ?";
+            $params[] = $filters['min_price'];
+        }
+        if (!empty($filters['max_price'])) {
+            $sql .= " AND p.price <= ?";
+            $params[] = $filters['max_price'];
+        }
+        if (!empty($filters['bedrooms'])) {
+            $sql .= " AND p.bedrooms = ?";
+            $params[] = $filters['bedrooms'];
+        }
+
+        $sql .= " ORDER BY p.id DESC";
+
+        $stmt = $this->conn->prepare($sql);
+        $stmt->execute($params);
+        $properties = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($properties as &$property) {
+            $stmtImg = $this->conn->prepare("SELECT image_path FROM property_images WHERE property_id = ?");
+            $stmtImg->execute([$property['id']]);
+            $property['images'] = $stmtImg->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        return $properties;
+    }
+
     // ================= BOOKING FUNCTIONS ================= //
 
-        // Create booking
-        public function addBooking($propertyId, $renterId, $startDate, $endDate) {
+    // Create booking
+    public function addBooking($propertyId, $renterId, $startDate, $endDate) {
         try {
             $this->conn->beginTransaction();
 
@@ -140,7 +192,6 @@ class Property extends Model {
         }
     }
 
-
     // Get bookings by renter
     public function getBookingsByRenter($renterId) {
         $stmt = $this->conn->prepare("
@@ -155,5 +206,24 @@ class Property extends Model {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // Update availability of a property
+    public function updateAvailability($id, $availability) {
+        $stmt = $this->conn->prepare("UPDATE properties SET availability = ? WHERE id = ?");
+        return $stmt->execute([$availability, $id]);
+    }
+    public function getReviewsByProperty($propertyId) {
+        $stmt = $this->conn->prepare("
+            SELECT r.rating, 
+               r.feedback AS comment, 
+               r.created_at,
+               u.name AS reviewer_name
+            FROM reviews r
+            JOIN users u ON r.renter_id = u.id
+            WHERE r.property_id = ?
+            ORDER BY r.created_at DESC
+        ");
+        $stmt->execute([$propertyId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
 ?>

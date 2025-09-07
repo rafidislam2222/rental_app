@@ -18,12 +18,17 @@ class PropertyController extends Controller {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $title = $_POST['title'];
             $location = $_POST['location'];
-            $price = $_POST['price'];
-            $bedrooms = $_POST['bedrooms'];
+            $price = (int)$_POST['price'];
+            $bedrooms = (int)$_POST['bedrooms'];
             $amenities = $_POST['amenities'];
             $description = $_POST['description'];
 
             $propertyModel = $this->model("Property");
+            if ($price < 0 || $bedrooms < 0) {
+                $error = "Price and Bedrooms cannot be negative!";
+                $this->view("properties/add", ['error' => $error]);
+                return; // stop execution
+            }
             $propertyId = $propertyModel->addProperty($_SESSION['user_id'], $title, $location, $price, $bedrooms, $amenities, $description);
 
             if ($propertyId) {
@@ -77,10 +82,22 @@ class PropertyController extends Controller {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $title = $_POST['title'];
             $location = $_POST['location'];
-            $price = $_POST['price'];
-            $bedrooms = $_POST['bedrooms'];
+            $price = (int)$_POST['price'];
+            $bedrooms = (int)$_POST['bedrooms'];
             $amenities = $_POST['amenities'];
             $description = $_POST['description'];
+            if ($price < 0 || $bedrooms < 0) {
+                $error = "Price and Bedrooms cannot be negative!";
+                $property = $propertyModel->getPropertyById($id);
+                $images = $propertyModel->getImagesByProperty($id);
+                $this->view("properties/edit", [
+                    'error' => $error,
+                    'property' => $property,
+                    'images' => $images
+                ]);
+                return;
+            }
+
 
             $propertyModel->updateProperty($id, $title, $location, $price, $bedrooms, $amenities, $description);
 
@@ -132,6 +149,7 @@ class PropertyController extends Controller {
     // ================= RENTER FUNCTIONS ================= //
 
     // Feature 4: List all available properties (with optional filters in future)
+    // Feature 4: List all properties (available + booked, with booked status)
     public function listAll() {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -153,10 +171,18 @@ class PropertyController extends Controller {
         }
 
         $propertyModel = $this->model("Property");
-        $properties = $propertyModel->getAvailableProperties($filters);
+        // 🔹 New function: getAllPropertiesWithStatus (includes booked ones too)
+        $properties = $propertyModel->getAllPropertiesWithStatus($filters);
+        foreach ($properties as &$prop) {
+            $prop['reviews'] = $propertyModel->getReviewsByProperty($prop['id']);
+            $prop['images']  = $propertyModel->getImagesByProperty($prop['id']); // 🔹 add this
+        }
 
         $this->view("properties/list", ['properties' => $properties]);
     }
+
+
+
     // Book a property
     // Feature 6: Book a property
     public function book() {
@@ -172,11 +198,18 @@ class PropertyController extends Controller {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $propertyId = $_POST['property_id'] ?? null;
-            $startDate = $_POST['start_date'] ?? null;
-            $endDate = $_POST['end_date'] ?? null;
+            $startDate  = $_POST['start_date'] ?? null;
+            $endDate    = $_POST['end_date'] ?? null;
 
             if (!$propertyId || !$startDate || !$endDate) {
                 $_SESSION['error'] = "All booking fields are required.";
+                header("Location: /rental_system/public/index.php?url=PropertyController/listAll");
+                exit;
+            }
+
+            // ✅ Check date validity
+            if (strtotime($endDate) < strtotime($startDate)) {
+                $_SESSION['error'] = "End date cannot be before start date.";
                 header("Location: /rental_system/public/index.php?url=PropertyController/listAll");
                 exit;
             }
@@ -186,14 +219,21 @@ class PropertyController extends Controller {
 
             if ($result) {
                 $_SESSION['success'] = "Booking request sent!";
+                header("Location: /rental_system/public/index.php?url=BookingController/myBookings");
+                exit;
             } else {
                 $_SESSION['error'] = "Failed to book the property.";
+                header("Location: /rental_system/public/index.php?url=PropertyController/listAll");
+                exit;
             }
-
-            header("Location: /rental_system/public/index.php?url=PropertyController/my_bookings");
-            exit;
         }
+    
+
+        // fallback → redirect to listAll
+        header("Location: /rental_system/public/index.php?url=PropertyController/listAll");
+        exit;
     }
+
     // Show my bookings
     public function my_bookings() {
         if (session_status() === PHP_SESSION_NONE) {
@@ -209,5 +249,57 @@ class PropertyController extends Controller {
 
         $this->view("properties/my_bookings", ['bookings' => $bookings]);
     }
+    // Add property to wishlist
+    public function addToWishlist($propertyId) {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'renter') {
+            header("Location: /rental_system/public/index.php?url=UserController/login");
+            exit;
+        }
+
+        $wishlistModel = $this->model("Wishlist");
+        $wishlistModel->add($_SESSION['user_id'], $propertyId);
+
+        header("Location: /rental_system/public/index.php?url=PropertyController/listAll");
+        exit;
+    }
+
+    // Show my wishlist
+    public function myWishlist() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'renter') {
+            header("Location: /rental_system/public/index.php?url=UserController/login");
+            exit;
+        }
+
+        $wishlistModel = $this->model("Wishlist");
+        $properties = $wishlistModel->getByRenter($_SESSION['user_id']);
+
+        $this->view("properties/wishlist", ['properties' => $properties]);
+    }
+
+
+
+    // Remove property from wishlist
+    public function removeFromWishlist($propertyId) {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'renter') {
+            header("Location: /rental_system/public/index.php?url=UserController/login");
+            exit;
+        }
+
+        $wishlistModel = $this->model("Wishlist");
+        $wishlistModel->remove($_SESSION['user_id'], $propertyId);
+
+        header("Location: /rental_system/public/index.php?url=PropertyController/myWishlist");
+        exit;
+    }
+
 }        
 ?>
